@@ -1,0 +1,27 @@
+{
+  "name": "mikasalo-backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "tsc": "tsc",
+    "dev": "ts-node-dev index.ts",
+    "lint": "eslint ."
+  },
+  "author": "Jose Neil Silagan Jr.",
+  "license": "ISC",
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@stylistic/eslint-plugin": "^5.5.0",
+    "@types/eslint": "^9.6.1",
+    "@types/express": "^5.0.5",
+    "eslint": "^9.39.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.4"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
