@@ -7,8 +7,10 @@ export interface IngredientUsed {
 
 export interface Recipe {
     id: string,
-    menuItemId: number,
-    ingredientsUsed: IngredientUsed[]
+    menuItemId: string,
+    ingredientsUsed: IngredientUsed[],
+    createdAt?: Date,
+    updatedAt?: Date
 }
 
 export const IngredientUsedSchema = z.object({
