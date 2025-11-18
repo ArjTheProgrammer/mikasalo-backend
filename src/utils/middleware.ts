@@ -57,7 +57,7 @@ const tokenExtractor = (
 //   next()
 // }
 
-module.exports = {
+export default {
   requestLogger,
   unknownEndpoint,
   errorHandler,

@@ -1,12 +1,23 @@
-require('dotenv').config()
+import dotenv from 'dotenv'
 
-const PORT = process.env.PORT || 3001
+dotenv.config()
+
+const validateEnvVar = (name: string): string => {
+  const value = process.env[name]
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`)
+  }
+  return value
+}
+
+const PORT = Number(process.env.PORT) || 3001
 
 const MONGODB_URI = process.env.NODE_ENV === 'test' 
-  ? process.env.TEST_MONGODB_URI
-  : process.env.MONGODB_URI
+  ? validateEnvVar('TEST_MONGODB_URI')
+  : validateEnvVar('MONGODB_URI')
 
-module.exports = {
+export default {
   MONGODB_URI,
-  PORT
-}
+  PORT,
+  NODE_ENV: process.env.NODE_ENV || 'development'
+} as const
