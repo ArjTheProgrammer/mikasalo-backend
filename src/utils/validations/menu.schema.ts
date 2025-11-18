@@ -1,9 +1,9 @@
 import z from 'zod'
 
 export enum Category {
-    Pasta = 'pasta',
-    Buger = 'burger',
-    Dessert = 'dessert'
+    PASTA = 'pasta',
+    BURGER = 'burger',
+    DESSERT = 'dessert'
 }
 
 export interface Menu {
@@ -20,7 +20,7 @@ export const NewMenuSchema = z.object({
     name: z.string(),
     description: z.string(),
     price: z.number(),
-    category: z.enum(Category),
+    category: z.nativeEnum(Category),
     imageUrl: z.string().optional()
 })
 

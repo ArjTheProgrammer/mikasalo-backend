@@ -1,9 +1,9 @@
 import z from 'zod';
 
 export enum Role {
-    Customer = 'customer',
-    Admin = 'admin',
-    Cook = 'cook'
+    CUSTOMER = 'customer',
+    ADMIN = 'admin',
+    COOK = 'cook'
 } 
 
 export interface User {
