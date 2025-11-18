@@ -7,7 +7,7 @@ export enum Category {
 }
 
 export interface Menu {
-    id: number,
+    id: string,
     name: string,
     description: string,
     price: number,
@@ -20,7 +20,7 @@ export const NewMenuSchema = z.object({
     name: z.string(),
     description: z.string(),
     price: z.number(),
-    category: z.nativeEnum(Category),
+    category: z.enum(Category),
     imageUrl: z.string().optional()
 })
 

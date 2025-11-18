@@ -24,7 +24,7 @@ export enum Unit {
 }
 
 export interface Inventory {
-    id: number,
+    id: string,
     name: string,
     unit: Unit,
     currentStock: number,

@@ -1,23 +1,23 @@
 import z from 'zod'
 
 export interface IngredientUsed {
-    inventoryId: number,
+    inventoryId: string,
     quantityUsed: number
 }
 
 export interface Recipe {
-    id: number,
+    id: string,
     menuItemId: number,
     ingredientsUsed: IngredientUsed[]
 }
 
 export const IngredientUsedSchema = z.object({
-    inventoryId: z.number(),
+    inventoryId: z.string(),
     quantityUsed: z.number()
 })
 
 export const NewRecipeSchema = z.object({
-    menuItemId: z.number(),
+    menuItemId: z.string(),
     ingredientsUsed: z.array(IngredientUsedSchema)
 })
 
