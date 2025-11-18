@@ -3,11 +3,11 @@ import z from 'zod';
 export enum Role {
     Customer = 'customer',
     Admin = 'admin',
-    cook = 'cook'
+    Cook = 'cook'
 } 
 
 export interface User {
-    id: Number,
+    id: number,
     email: string,
     passwordHash: string,
     name: string,
