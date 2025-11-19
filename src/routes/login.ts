@@ -39,7 +39,7 @@ loginRouter.post('/', async (request: Request<unknown, unknown, LoginRequest>, r
 
   const token = jwt.sign(userForToken, secret, { expiresIn: '1h' });
 
-  response
+  return response
     .status(200)
     .send({ 
       token, 
