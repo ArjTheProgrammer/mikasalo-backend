@@ -3,12 +3,13 @@ import mongoose from 'mongoose';
 import app from '../app';
 import User from '../models/user.model';
 import { Role } from '../utils/validations/user.schema';
+import config from '../utils/config';
 
 describe('Auth and User Routes', () => {
   beforeAll(async () => {
     // Connect to test database if not already connected
     if (mongoose.connection.readyState === 0) {
-      await mongoose.connect(process.env.MONGODB_TEST_URI || 'mongodb://localhost:27017/mikasalo-test');
+      await mongoose.connect(config.MONGODB_URI);
     }
   });
 

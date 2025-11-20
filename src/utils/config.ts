@@ -19,5 +19,4 @@ const MONGODB_URI = process.env.NODE_ENV === 'test'
 export default {
   MONGODB_URI,
   PORT,
-  NODE_ENV: process.env.NODE_ENV || 'development'
-} as const
+}
