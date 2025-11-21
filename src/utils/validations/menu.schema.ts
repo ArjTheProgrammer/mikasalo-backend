@@ -21,7 +21,8 @@ export const NewMenuSchema = z.object({
     description: z.string(),
     price: z.number(),
     category: z.enum(Category),
-    imageUrl: z.string().optional()
+    imageUrl: z.string().optional(),
+    isAvailable: z.boolean().default(false)
 })
 
 export type newMenu = z.infer<typeof NewMenuSchema>;
