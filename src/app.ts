@@ -6,6 +6,7 @@ import config from './utils/config';
 import middleware from './utils/middleware';
 import userRouter from './routes/users';
 import loginRouter from './routes/login';
+import menuRouter from './routes/menu';
 
 mongoose.set('strictQuery', false);
 
@@ -31,6 +32,7 @@ app.use(middleware.tokenExtractor);
 
 app.use('/api/users', userRouter);
 app.use('/api/login', loginRouter);
+app.use('api/menu', menuRouter);
 
 app.get('/ping', (_req, res) => {
   console.log('someone pinged here');
