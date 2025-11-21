@@ -1,5 +1,6 @@
 import logger from './logger'
 import { Response, Request, NextFunction } from 'express'
+import z from 'zod';
 // import jwt from 'jsonwebtoken'
 
 const requestLogger = (request: Request , _response: Response, next: NextFunction): void => {
@@ -30,7 +31,13 @@ const errorHandler = (
     return response.status(400).json({ error: 'token missing or invalid' })
   } else if (error.name === 'TokenExpiredError') {
     return response.status(401).json({ error: 'token expired' })
-  }
+  } else if (error instanceof z.ZodError) {
+      response.status(400).send({ error: error.issues });
+    } else if (error instanceof Error) {
+      response.status(400).json({ error: error.message });
+    } else {
+      next(error);
+    }
 
   return next(error)
 }

@@ -1,7 +1,7 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response } from 'express';
 import userService from '../services/userService';
-import { NewUserSchema, newUser } from '../utils/validations/user.schema';
-import { z } from 'zod';
+import { newUser } from '../utils/validations/user.schema';
+import { newUserParser } from '../utils/middlewareParser';
 
 const router = express.Router();
 
@@ -28,25 +28,6 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-const newUserParser = (req: Request, _res: Response, next: NextFunction) => {
-  try {
-    NewUserSchema.parse(req.body);
-    next();
-  } catch (error: unknown) {
-    next(error);
-  }
-};
-
-const errorMiddleware = (error: unknown, _req: Request, res: Response, next: NextFunction) => {
-  if (error instanceof z.ZodError) {
-    res.status(400).send({ error: error.issues });
-  } else if (error instanceof Error) {
-    res.status(400).json({ error: error.message });
-  } else {
-    next(error);
-  }
-};
-
 router.post('/', newUserParser, async (req: Request<unknown, unknown, newUser>, res: Response) => {
   try {
     const savedUser = await userService.createUser(req.body);
@@ -59,7 +40,5 @@ router.post('/', newUserParser, async (req: Request<unknown, unknown, newUser>, 
     }
   }
 });
-
-router.use(errorMiddleware);
 
 export default router;
