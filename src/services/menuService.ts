@@ -8,15 +8,18 @@ const getAllMenu = async () => {
 }
 
 const createMenu = async (menuData: newMenu) => {
-    const menu = new Menu({
-        menuData
-    });
-
+    const menu = new Menu(menuData);
     const savedMenu = await menu.save();
     return savedMenu;
 }
 
+const createManyMenus = async (menuItems: newMenu[]) => {
+    const menus = await Menu.insertMany(menuItems);
+    return menus;
+}
+
 export default {
     getAllMenu,
-    createMenu
+    createMenu,
+    createManyMenus
 }
