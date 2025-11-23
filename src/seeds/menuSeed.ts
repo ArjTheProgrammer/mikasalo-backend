@@ -14,7 +14,8 @@ const seedMenuData = async () => {
     console.log('Existing menu data cleared');
 
     console.log('Inserting new menu data...');
-    const insertedMenus = await Menu.insertMany(menuDataArray);
+    const menuDataWithIds = menuDataArray.map(item => ({ ...item, _id: item.id }));
+    const insertedMenus = await Menu.insertMany(menuDataWithIds);
     console.log(`Successfully seeded ${insertedMenus.length} menu items`);
 
     console.log('\nInserted menu items:');

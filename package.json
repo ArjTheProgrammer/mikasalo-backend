@@ -9,8 +9,11 @@
     "dev": "NODE_ENV=development ts-node-dev src/index.ts",
     "lint": "eslint .",
     "start": "NODE_ENV=production node build/index.ts",
-    "seed": "NODE_ENV=development ts-node-dev",
-    "seed:test": "NODE_ENV=test ts-node-dev"
+    "seed:inventory": "NODE_ENV=development ts-node-dev src/seeds/inventorySeed.ts",
+    "seed:menu": "NODE_ENV=development ts-node-dev src/seeds/menuSeed.ts",
+    "seed:recipes": "NODE_ENV=development ts-node-dev src/seeds/recipeSeed.ts",
+    "seed:all": "NODE_ENV=development ts-node-dev src/seeds/masterSeed.ts",
+    "seed:test:all": "NODE_ENV=test ts-node-dev src/seeds/masterSeed.ts"
   },
   "author": "Jose Neil Silagan Jr.",
   "license": "ISC",
