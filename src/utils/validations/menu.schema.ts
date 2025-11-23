@@ -17,6 +17,7 @@ export interface Menu {
 }
 
 export const NewMenuSchema = z.object({
+    id: z.string(),
     name: z.string(),
     description: z.string(),
     price: z.number(),

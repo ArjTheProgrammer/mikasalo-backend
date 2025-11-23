@@ -13,6 +13,10 @@ const ingredientUsedSchema = new mongoose.Schema({
 }, { _id: false });
 
 const recipeSchema = new mongoose.Schema({
+  _id: {
+    type: String,
+    required: true
+  },
   menuItemId: {
     type: String,
     required: true

@@ -19,6 +19,7 @@ export const IngredientUsedSchema = z.object({
 })
 
 export const NewRecipeSchema = z.object({
+    id: z.string(),
     menuItemId: z.string(),
     ingredientsUsed: z.array(IngredientUsedSchema)
 })

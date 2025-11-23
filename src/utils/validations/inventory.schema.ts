@@ -32,6 +32,7 @@ export interface Inventory {
 }
 
 export const NewInventorySchema = z.object({
+    id: z.string(),
     name: z.string(),
     unit: z.enum(Unit),
     currentStock: z.number(),
