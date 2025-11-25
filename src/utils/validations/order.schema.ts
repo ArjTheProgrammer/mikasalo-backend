@@ -33,6 +33,12 @@ export const updateOrderSchema = z.object({
   updatedAt: z.date().default(() => new Date())
 });
 
+export const updateOrderItemsSchema = z.object({
+  items: z.array(orderItemSchema).min(1, 'Order must contain at least one item'),
+  totalPrice: z.number().positive('Total price must be positive').optional(),
+  updatedAt: z.date().default(() => new Date()).optional()
+});
+
 export const orderQuerySchema = z.object({
   userId: z.string().optional(),
   status: z.enum(OrderStatus).optional(),
@@ -42,5 +48,18 @@ export const orderQuerySchema = z.object({
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 export type UpdateOrderInput = z.infer<typeof updateOrderSchema>;
+export type UpdateOrderItemsInput = z.infer<typeof updateOrderItemsSchema>;
 export type OrderQueryInput = z.infer<typeof orderQuerySchema>;
 export type OrderItem = z.infer<typeof orderItemSchema>;
+
+export const toNewOrder = (object: unknown): CreateOrderInput => {
+    return createOrderSchema.parse(object);
+};
+
+export const toUpdateOrder = (object: unknown): UpdateOrderInput => {
+    return updateOrderSchema.parse(object);
+};
+
+export const toUpdateOrderItems = (object: unknown): UpdateOrderItemsInput => {
+    return updateOrderItemsSchema.parse(object);
+};

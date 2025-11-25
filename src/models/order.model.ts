@@ -27,7 +27,8 @@ const orderItemSchema = new mongoose.Schema({
 const orderSchema = new mongoose.Schema({
   userId: {
     type: String,
-    required: true
+    required: true,
+    index: true
   },
   items: {
     type: [orderItemSchema],
@@ -40,8 +41,9 @@ const orderSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: Object.values(OrderStatus),
-    default: 'Pending',
-    required: true
+    default: OrderStatus.PENDING,
+    required: true,
+    index: true
   },
   deliveryAddress: {
     type: String,
@@ -50,11 +52,17 @@ const orderSchema = new mongoose.Schema({
   orderTime: {
     type: Date,
     default: Date.now,
-    required: true
+    required: true,
+    index: true
   }
 }, {
   timestamps: true
 });
+
+// Compound indexes for common query patterns
+orderSchema.index({ userId: 1, status: 1 });
+orderSchema.index({ status: 1, orderTime: -1 });
+orderSchema.index({ userId: 1, orderTime: -1 });
 
 orderSchema.set('toJSON', {
   transform: (_document: any, returnedObject: any) => {
