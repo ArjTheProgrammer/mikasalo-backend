@@ -12,6 +12,17 @@ interface LowStockAlert {
     timestamp: Date;
 }
 
+interface OrderUpdate {
+    orderId: string;
+    userId: string;
+    status: string;
+    totalPrice: number;
+    orderTime: Date;
+    updatedAt: Date;
+    type: 'created' | 'status_updated' | 'items_updated' | 'deleted';
+    message: string;
+}
+
 interface AuthenticatedSocket {
     userId: string;
     role: Role;
@@ -20,7 +31,9 @@ interface AuthenticatedSocket {
 
 let io: SocketIOServer | null = null;
 const lowStockQueue: LowStockAlert[] = [];
+const orderQueue: OrderUpdate[] = [];
 const MAX_QUEUE_SIZE = 100;
+const MAX_ORDER_QUEUE_SIZE = 50;
 
 export const initializeWebSocket = (server: Server): SocketIOServer => {
     io = new SocketIOServer(server, {
@@ -46,8 +59,8 @@ export const initializeWebSocket = (server: Server): SocketIOServer => {
 
             const decoded = jwt.verify(token, secret) as AuthenticatedSocket;
             
-            // Only allow admin and cook roles for inventory notifications
-            if (decoded.role !== Role.ADMIN && decoded.role !== Role.COOK) {
+            // Allow admin, cook, and customer roles for order notifications
+            if (decoded.role !== Role.ADMIN && decoded.role !== Role.COOK && decoded.role !== Role.CUSTOMER) {
                 return next(new Error('Authentication error: Insufficient permissions'));
             }
 
@@ -60,37 +73,78 @@ export const initializeWebSocket = (server: Server): SocketIOServer => {
 
     io.on('connection', (socket: any) => {
         const user = socket.data as AuthenticatedSocket;
-        console.log(`Admin/Cook connected: ${user.email} (${user.role})`);
+        console.log(`User connected: ${user.email} (${user.role})`);
 
-        // Send existing low stock alerts in FIFO order when client connects
-        socket.emit('lowStockQueue', lowStockQueue);
+        // Send existing low stock alerts in FIFO order when client connects (admin/cook only)
+        if (user.role === Role.ADMIN || user.role === Role.COOK) {
+            socket.emit('lowStockQueue', lowStockQueue);
+            socket.join('inventory-alerts');
+        }
 
-        // Join admin room for inventory notifications
-        socket.join('inventory-alerts');
+        // Send existing order queue in FIFO order when client connects
+        socket.emit('orderQueue', orderQueue);
+        
+        // Join appropriate rooms based on role
+        if (user.role === Role.ADMIN || user.role === Role.COOK) {
+            socket.join('order-management'); // Can see all orders
+        } else if (user.role === Role.CUSTOMER) {
+            socket.join(`customer-${user.userId}`); // Can only see their own orders
+        }
 
         socket.on('disconnect', () => {
-            console.log(`Admin/Cook disconnected: ${user.email}`);
+            console.log(`User disconnected: ${user.email}`);
         });
 
-        // Handle request for current low stock items
+        // Handle request for current low stock items (admin/cook only)
         socket.on('requestLowStockUpdate', () => {
-            socket.emit('lowStockQueue', lowStockQueue);
+            if (user.role === Role.ADMIN || user.role === Role.COOK) {
+                socket.emit('lowStockQueue', lowStockQueue);
+            }
         });
 
-        // Handle clearing specific alert from queue
+        // Handle request for current order queue
+        socket.on('requestOrderUpdate', () => {
+            socket.emit('orderQueue', orderQueue);
+        });
+
+        // Handle clearing specific alert from queue (admin/cook only)
         socket.on('clearLowStockAlert', (inventoryId: string) => {
-            const index = lowStockQueue.findIndex(alert => alert.inventoryId === inventoryId);
-            if (index > -1) {
-                lowStockQueue.splice(index, 1);
-                // Broadcast updated queue to all connected admins
+            if (user.role === Role.ADMIN || user.role === Role.COOK) {
+                const index = lowStockQueue.findIndex(alert => alert.inventoryId === inventoryId);
+                if (index > -1) {
+                    lowStockQueue.splice(index, 1);
+                    // Broadcast updated queue to all connected admins
+                    io?.to('inventory-alerts').emit('lowStockQueue', lowStockQueue);
+                }
+            }
+        });
+
+        // Handle clearing all alerts (admin/cook only)
+        socket.on('clearAllLowStockAlerts', () => {
+            if (user.role === Role.ADMIN || user.role === Role.COOK) {
+                lowStockQueue.length = 0;
                 io?.to('inventory-alerts').emit('lowStockQueue', lowStockQueue);
             }
         });
 
-        // Handle clearing all alerts
-        socket.on('clearAllLowStockAlerts', () => {
-            lowStockQueue.length = 0;
-            io?.to('inventory-alerts').emit('lowStockQueue', lowStockQueue);
+        // Handle clearing specific order from queue (admin/cook only)
+        socket.on('clearOrderUpdate', (orderId: string) => {
+            if (user.role === Role.ADMIN || user.role === Role.COOK) {
+                const index = orderQueue.findIndex(order => order.orderId === orderId);
+                if (index > -1) {
+                    orderQueue.splice(index, 1);
+                    // Broadcast updated queue to all connected users
+                    io?.emit('orderQueue', orderQueue);
+                }
+            }
+        });
+
+        // Handle clearing all order updates (admin only)
+        socket.on('clearAllOrderUpdates', () => {
+            if (user.role === Role.ADMIN) {
+                orderQueue.length = 0;
+                io?.emit('orderQueue', orderQueue);
+            }
         });
     });
 
@@ -126,6 +180,31 @@ export const broadcastLowStockAlert = (alert: LowStockAlert): void => {
     io.to('inventory-alerts').emit('lowStockQueue', lowStockQueue);
 };
 
+export const broadcastOrderUpdate = (orderUpdate: OrderUpdate): void => {
+    if (!io) {
+        console.warn('WebSocket not initialized. Cannot broadcast order update.');
+        return;
+    }
+
+    // Add to order queue (FIFO)
+    orderQueue.unshift(orderUpdate);
+    
+    // Maintain maximum queue size
+    if (orderQueue.length > MAX_ORDER_QUEUE_SIZE) {
+        orderQueue.pop();
+    }
+
+    // Broadcast to admin/cook rooms (they see all orders)
+    io.to('order-management').emit('orderUpdate', orderUpdate);
+    io.to('order-management').emit('orderQueue', orderQueue);
+
+    // Also broadcast to specific customer if it's their order
+    io.to(`customer-${orderUpdate.userId}`).emit('orderUpdate', orderUpdate);
+    
+    // Broadcast updated queue to all connected users
+    io.emit('orderQueue', orderQueue);
+};
+
 export const getWebSocketServer = (): SocketIOServer | null => {
     return io;
 };
@@ -136,4 +215,4 @@ export const disconnectAllClients = (): void => {
     }
 };
 
-export { LowStockAlert, AuthenticatedSocket };
+export { LowStockAlert, OrderUpdate, AuthenticatedSocket };

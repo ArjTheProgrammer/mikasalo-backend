@@ -3,6 +3,7 @@ import Recipe from "../models/recipe.model";
 import Menu from "../models/menu.model";
 import inventoryService from "./inventoryService";
 import { CreateOrderInput, UpdateOrderInput, UpdateOrderItemsInput, OrderQueryInput, OrderStatus, OrderItem } from "../utils/validations/order.schema";
+import { broadcastOrderUpdate } from "../utils/websocket";
 
 interface RequiredIngredient {
     inventoryId: string;
@@ -132,6 +133,19 @@ const createOrder = async (orderData: CreateOrderInput) => {
     });
     
     const savedOrder = await order.save();
+    
+    // Broadcast order creation via WebSocket
+    broadcastOrderUpdate({
+        orderId: savedOrder.id,
+        userId: savedOrder.userId,
+        status: savedOrder.status,
+        totalPrice: savedOrder.totalPrice,
+        orderTime: savedOrder.orderTime,
+        updatedAt: savedOrder.updatedAt || new Date(),
+        type: 'created',
+        message: `New order created with ${savedOrder.items.length} item(s)`
+    });
+    
     return savedOrder;
 };
 
@@ -199,6 +213,20 @@ const updateOrderStatus = async (id: string, updateData: UpdateOrderInput) => {
         { new: true }
     );
     
+    if (updatedOrder) {
+        // Broadcast order status update via WebSocket
+        broadcastOrderUpdate({
+            orderId: updatedOrder.id,
+            userId: updatedOrder.userId,
+            status: updatedOrder.status,
+            totalPrice: updatedOrder.totalPrice,
+            orderTime: updatedOrder.orderTime,
+            updatedAt: updatedOrder.updatedAt || new Date(),
+            type: 'status_updated',
+            message: `Order status changed from ${previousStatus} to ${updatedOrder.status}`
+        });
+    }
+    
     return updatedOrder;
 };
 
@@ -247,6 +275,20 @@ const updateOrderItems = async (id: string, updateData: UpdateOrderItemsInput) =
         { new: true }
     );
     
+    if (updatedOrder) {
+        // Broadcast order items update via WebSocket
+        broadcastOrderUpdate({
+            orderId: updatedOrder.id,
+            userId: updatedOrder.userId,
+            status: updatedOrder.status,
+            totalPrice: updatedOrder.totalPrice,
+            orderTime: updatedOrder.orderTime,
+            updatedAt: updatedOrder.updatedAt || new Date(),
+            type: 'items_updated',
+            message: `Order items updated - ${updatedOrder.items.length} item(s), Total: ₱${updatedOrder.totalPrice}`
+        });
+    }
+    
     return updatedOrder;
 };
 
@@ -266,6 +308,21 @@ const deleteOrder = async (id: string) => {
     // so no inventory restoration is needed for deletion
     
     const deletedOrder = await Order.findByIdAndDelete(id);
+    
+    if (deletedOrder) {
+        // Broadcast order deletion via WebSocket
+        broadcastOrderUpdate({
+            orderId: deletedOrder.id,
+            userId: deletedOrder.userId,
+            status: deletedOrder.status,
+            totalPrice: deletedOrder.totalPrice,
+            orderTime: deletedOrder.orderTime,
+            updatedAt: new Date(),
+            type: 'deleted',
+            message: `Order deleted - Status was ${deletedOrder.status}`
+        });
+    }
+    
     return deletedOrder;
 };
 
