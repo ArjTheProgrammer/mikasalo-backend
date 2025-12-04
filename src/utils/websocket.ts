@@ -29,11 +29,25 @@ interface AuthenticatedSocket {
     email: string;
 }
 
+interface TransactionUpdate {
+    transactionId: string;
+    userId: string;
+    orderId: string;
+    amount: number;
+    status: 'pending' | 'completed' | 'failed' | 'refunded';
+    paymentMethod: string;
+    timestamp: Date;
+    type: 'created' | 'status_updated' | 'refund_processed';
+    message: string;
+}
+
 let io: SocketIOServer | null = null;
 const lowStockQueue: LowStockAlert[] = [];
 const orderQueue: OrderUpdate[] = [];
+const transactionQueue: TransactionUpdate[] = [];
 const MAX_QUEUE_SIZE = 100;
 const MAX_ORDER_QUEUE_SIZE = 50;
+const MAX_TRANSACTION_QUEUE_SIZE = 50;
 
 export const initializeWebSocket = (server: Server): SocketIOServer => {
     io = new SocketIOServer(server, {
@@ -83,12 +97,16 @@ export const initializeWebSocket = (server: Server): SocketIOServer => {
 
         // Send existing order queue in FIFO order when client connects
         socket.emit('orderQueue', orderQueue);
+
+        // Send existing transaction queue when client connects
+        socket.emit('transactionQueue', transactionQueue);
         
         // Join appropriate rooms based on role
         if (user.role === Role.ADMIN || user.role === Role.COOK) {
             socket.join('order-management'); // Can see all orders
         } else if (user.role === Role.CUSTOMER) {
             socket.join(`customer-${user.userId}`); // Can only see their own orders
+            socket.join(`customer-transactions-${user.userId}`); // Can only see their own transactions
         }
 
         socket.on('disconnect', () => {
@@ -105,6 +123,19 @@ export const initializeWebSocket = (server: Server): SocketIOServer => {
         // Handle request for current order queue
         socket.on('requestOrderUpdate', () => {
             socket.emit('orderQueue', orderQueue);
+        });
+
+        // Handle request for current transaction queue
+        socket.on('requestTransactionUpdate', () => {
+            if (user.role === Role.ADMIN) {
+                socket.emit('transactionQueue', transactionQueue);
+            } else if (user.role === Role.CUSTOMER) {
+                // Filter transactions for this customer only
+                const customerTransactions = transactionQueue.filter(
+                    transaction => transaction.userId === user.userId
+                );
+                socket.emit('transactionQueue', customerTransactions);
+            }
         });
 
         // Handle clearing specific alert from queue (admin/cook only)
@@ -144,6 +175,25 @@ export const initializeWebSocket = (server: Server): SocketIOServer => {
             if (user.role === Role.ADMIN) {
                 orderQueue.length = 0;
                 io?.emit('orderQueue', orderQueue);
+            }
+        });
+
+        // Handle clearing specific transaction from queue (admin only)
+        socket.on('clearTransactionUpdate', (transactionId: string) => {
+            if (user.role === Role.ADMIN) {
+                const index = transactionQueue.findIndex(transaction => transaction.transactionId === transactionId);
+                if (index > -1) {
+                    transactionQueue.splice(index, 1);
+                    io?.to('transaction-management').emit('transactionQueue', transactionQueue);
+                }
+            }
+        });
+
+        // Handle clearing all transaction updates (admin only)
+        socket.on('clearAllTransactionUpdates', () => {
+            if (user.role === Role.ADMIN) {
+                transactionQueue.length = 0;
+                io?.emit('transactionQueue', transactionQueue);
             }
         });
     });
@@ -205,6 +255,28 @@ export const broadcastOrderUpdate = (orderUpdate: OrderUpdate): void => {
     io.emit('orderQueue', orderQueue);
 };
 
+export const broadcastTransactionUpdate = (transactionUpdate: TransactionUpdate): void => {
+    if (!io) {
+        console.warn('WebSocket not initialized. Cannot broadcast transaction update.');
+        return;
+    }
+
+    // Add to transaction queue (FIFO)
+    transactionQueue.unshift(transactionUpdate);
+    
+    // Maintain maximum queue size
+    if (transactionQueue.length > MAX_TRANSACTION_QUEUE_SIZE) {
+        transactionQueue.pop();
+    }
+
+    // Broadcast to admin room (they see all transactions)
+    io.to('transaction-management').emit('transactionUpdate', transactionUpdate);
+    io.to('transaction-management').emit('transactionQueue', transactionQueue);
+
+    // Also broadcast to specific customer if it's their transaction
+    io.to(`customer-transactions-${transactionUpdate.userId}`).emit('transactionUpdate', transactionUpdate);
+};
+
 export const getWebSocketServer = (): SocketIOServer | null => {
     return io;
 };
@@ -215,4 +287,4 @@ export const disconnectAllClients = (): void => {
     }
 };
 
-export { LowStockAlert, OrderUpdate, AuthenticatedSocket };
+export { LowStockAlert, OrderUpdate, AuthenticatedSocket, TransactionUpdate };
