@@ -2,6 +2,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { Server } from 'http';
 import jwt from 'jsonwebtoken';
 import { Role } from './validations/user.schema';
+import config from './config';
 
 interface LowStockAlert {
     inventoryId: string;
@@ -25,7 +26,7 @@ interface OrderUpdate {
 
 interface AuthenticatedSocket {
     userId: string;
-    role: Role;
+    role: Role | 'guest';
     email: string;
 }
 
@@ -50,152 +51,215 @@ const MAX_ORDER_QUEUE_SIZE = 50;
 const MAX_TRANSACTION_QUEUE_SIZE = 50;
 
 export const initializeWebSocket = (server: Server): SocketIOServer => {
-    io = new SocketIOServer(server, {
-        cors: {
-            origin: "*", // Configure based on your frontend URL in production
-            methods: ["GET", "POST"]
-        }
-    });
+    try {
+        io = new SocketIOServer(server, {
+            cors: {
+                origin: "*", // Configure based on your frontend URL in production
+                methods: ["GET", "POST"]
+            },
+            allowEIO3: true, // Allow Engine.IO v3 clients
+            transports: ['websocket', 'polling'], // Enable both transports
+            pingTimeout: 60000,
+            pingInterval: 25000
+        });
+
+        console.log('WebSocket server initialized successfully');
+    } catch (error: any) {
+        console.error('Failed to initialize WebSocket server:', error.message);
+        throw error;
+    }
 
     // Authentication middleware for WebSocket connections
     io.use((socket: any, next: any) => {
-        const token = socket.handshake.auth.token;
-        
-        if (!token) {
-            return next(new Error('Authentication error: No token provided'));
-        }
-
         try {
-            const secret = process.env.SECRET;
+            const token = socket.handshake.auth?.token;
+            
+            // Allow connections without token for now, but limit functionality
+            if (!token) {
+                console.log('WebSocket connection without token - limited access');
+                socket.data = { 
+                    userId: 'anonymous', 
+                    role: 'guest' as const, 
+                    email: 'anonymous' 
+                };
+                return next();
+            }
+
+            const secret = config.SECRET;
             if (!secret) {
+                console.error('Missing SECRET environment variable');
                 return next(new Error('Server configuration error'));
             }
 
-            const decoded = jwt.verify(token, secret) as AuthenticatedSocket;
+            const decoded = jwt.verify(token, secret) as any; // Use any for now
             
-            // Allow admin, cook, and customer roles for order notifications
-            if (decoded.role !== Role.ADMIN && decoded.role !== Role.COOK && decoded.role !== Role.CUSTOMER) {
-                return next(new Error('Authentication error: Insufficient permissions'));
+            // Map id to userId for consistency
+            const authenticatedSocket: AuthenticatedSocket = {
+                userId: decoded.id || decoded.userId, // Accept both formats
+                role: decoded.role,
+                email: decoded.email
+            };
+            
+            // Validate decoded token structure
+            if (!authenticatedSocket.userId || !authenticatedSocket.role || !authenticatedSocket.email) {
+                console.error('Invalid token structure:', decoded);
+                return next(new Error('Authentication error: Invalid token structure'));
             }
-
-            socket.data = decoded;
+            
+            socket.data = authenticatedSocket;
+            console.log(`WebSocket authentication successful for user: ${authenticatedSocket.email}`);
             next();
-        } catch (error) {
-            return next(new Error('Authentication error: Invalid token'));
+        } catch (error: any) {
+            console.error('WebSocket authentication error:', error.message);
+            return next(new Error(`Authentication error: ${error.message}`));
         }
     });
 
     io.on('connection', (socket: any) => {
-        const user = socket.data as AuthenticatedSocket;
-        console.log(`User connected: ${user.email} (${user.role})`);
+        try {
+            const user = socket.data as AuthenticatedSocket;
+            console.log(`User connected: ${user?.email || 'anonymous'} (${user?.role || 'guest'})`);
 
-        // Send existing low stock alerts in FIFO order when client connects (admin/cook only)
-        if (user.role === Role.ADMIN || user.role === Role.COOK) {
-            socket.emit('lowStockQueue', lowStockQueue);
-            socket.join('inventory-alerts');
-        }
+            // Handle guest connections
+            if (!user || user.role === 'guest') {
+                console.log('Guest connection established - limited functionality');
+                socket.emit('connectionStatus', { status: 'connected', role: 'guest' });
+                
+                socket.on('disconnect', (reason: string) => {
+                    console.log(`Guest user disconnected - Reason: ${reason}`);
+                });
+                
+                socket.on('error', (error: any) => {
+                    console.error('Guest socket error:', error.message);
+                });
+                
+                return;
+            }
 
-        // Send existing order queue in FIFO order when client connects
-        socket.emit('orderQueue', orderQueue);
-
-        // Send existing transaction queue when client connects
-        socket.emit('transactionQueue', transactionQueue);
-        
-        // Join appropriate rooms based on role
-        if (user.role === Role.ADMIN || user.role === Role.COOK) {
-            socket.join('order-management'); // Can see all orders
-        } else if (user.role === Role.CUSTOMER) {
-            socket.join(`customer-${user.userId}`); // Can only see their own orders
-            socket.join(`customer-transactions-${user.userId}`); // Can only see their own transactions
-        }
-
-        socket.on('disconnect', () => {
-            console.log(`User disconnected: ${user.email}`);
-        });
-
-        // Handle request for current low stock items (admin/cook only)
-        socket.on('requestLowStockUpdate', () => {
+            // Send existing low stock alerts in FIFO order when client connects (admin/cook only)
             if (user.role === Role.ADMIN || user.role === Role.COOK) {
                 socket.emit('lowStockQueue', lowStockQueue);
+                socket.join('inventory-alerts');
             }
-        });
 
-        // Handle request for current order queue
-        socket.on('requestOrderUpdate', () => {
+            // Send existing order queue in FIFO order when client connects
             socket.emit('orderQueue', orderQueue);
-        });
 
-        // Handle request for current transaction queue
-        socket.on('requestTransactionUpdate', () => {
-            if (user.role === Role.ADMIN) {
-                socket.emit('transactionQueue', transactionQueue);
-            } else if (user.role === Role.CUSTOMER) {
-                // Filter transactions for this customer only
-                const customerTransactions = transactionQueue.filter(
-                    transaction => transaction.userId === user.userId
-                );
-                socket.emit('transactionQueue', customerTransactions);
-            }
-        });
-
-        // Handle clearing specific alert from queue (admin/cook only)
-        socket.on('clearLowStockAlert', (inventoryId: string) => {
+            // Send existing transaction queue when client connects
+            socket.emit('transactionQueue', transactionQueue);
+            
+            // Join appropriate rooms based on role
             if (user.role === Role.ADMIN || user.role === Role.COOK) {
-                const index = lowStockQueue.findIndex(alert => alert.inventoryId === inventoryId);
-                if (index > -1) {
-                    lowStockQueue.splice(index, 1);
-                    // Broadcast updated queue to all connected admins
+                socket.join('order-management'); // Can see all orders
+            } else if (user.role === Role.CUSTOMER) {
+                socket.join(`customer-${user.userId}`); // Can only see their own orders
+                socket.join(`customer-transactions-${user.userId}`); // Can only see their own transactions
+            }
+
+            // Send connection success status
+            socket.emit('connectionStatus', { status: 'connected', role: user.role });
+
+            // Set up event handlers for authenticated users
+            socket.on('disconnect', (reason: string) => {
+                try {
+                    console.log(`User disconnected: ${user?.email || 'anonymous'} - Reason: ${reason}`);
+                } catch (error: any) {
+                    console.error('Error in disconnect handler:', error.message);
+                }
+            });
+
+            socket.on('error', (error: any) => {
+                console.error('Socket error:', error.message);
+            });
+
+            // Handle request for current low stock items (admin/cook only)
+            socket.on('requestLowStockUpdate', () => {
+                if (user.role === Role.ADMIN || user.role === Role.COOK) {
+                    socket.emit('lowStockQueue', lowStockQueue);
+                }
+            });
+
+            // Handle request for current order queue
+            socket.on('requestOrderUpdate', () => {
+                socket.emit('orderQueue', orderQueue);
+            });
+
+            // Handle request for current transaction queue
+            socket.on('requestTransactionUpdate', () => {
+                if (user.role === Role.ADMIN) {
+                    socket.emit('transactionQueue', transactionQueue);
+                } else if (user.role === Role.CUSTOMER) {
+                    // Filter transactions for this customer only
+                    const customerTransactions = transactionQueue.filter(
+                        transaction => transaction.userId === user.userId
+                    );
+                    socket.emit('transactionQueue', customerTransactions);
+                }
+            });
+
+            // Handle clearing specific alert from queue (admin/cook only)
+            socket.on('clearLowStockAlert', (inventoryId: string) => {
+                if (user.role === Role.ADMIN || user.role === Role.COOK) {
+                    const index = lowStockQueue.findIndex(alert => alert.inventoryId === inventoryId);
+                    if (index > -1) {
+                        lowStockQueue.splice(index, 1);
+                        // Broadcast updated queue to all connected admins
+                        io?.to('inventory-alerts').emit('lowStockQueue', lowStockQueue);
+                    }
+                }
+            });
+
+            // Handle clearing all alerts (admin/cook only)
+            socket.on('clearAllLowStockAlerts', () => {
+                if (user.role === Role.ADMIN || user.role === Role.COOK) {
+                    lowStockQueue.length = 0;
                     io?.to('inventory-alerts').emit('lowStockQueue', lowStockQueue);
                 }
-            }
-        });
+            });
 
-        // Handle clearing all alerts (admin/cook only)
-        socket.on('clearAllLowStockAlerts', () => {
-            if (user.role === Role.ADMIN || user.role === Role.COOK) {
-                lowStockQueue.length = 0;
-                io?.to('inventory-alerts').emit('lowStockQueue', lowStockQueue);
-            }
-        });
+            // Handle clearing specific order from queue (admin/cook only)
+            socket.on('clearOrderUpdate', (orderId: string) => {
+                if (user.role === Role.ADMIN || user.role === Role.COOK) {
+                    const index = orderQueue.findIndex(order => order.orderId === orderId);
+                    if (index > -1) {
+                        orderQueue.splice(index, 1);
+                        // Broadcast updated queue to all connected users
+                        io?.emit('orderQueue', orderQueue);
+                    }
+                }
+            });
 
-        // Handle clearing specific order from queue (admin/cook only)
-        socket.on('clearOrderUpdate', (orderId: string) => {
-            if (user.role === Role.ADMIN || user.role === Role.COOK) {
-                const index = orderQueue.findIndex(order => order.orderId === orderId);
-                if (index > -1) {
-                    orderQueue.splice(index, 1);
-                    // Broadcast updated queue to all connected users
+            // Handle clearing all order updates (admin only)
+            socket.on('clearAllOrderUpdates', () => {
+                if (user.role === Role.ADMIN) {
+                    orderQueue.length = 0;
                     io?.emit('orderQueue', orderQueue);
                 }
-            }
-        });
+            });
 
-        // Handle clearing all order updates (admin only)
-        socket.on('clearAllOrderUpdates', () => {
-            if (user.role === Role.ADMIN) {
-                orderQueue.length = 0;
-                io?.emit('orderQueue', orderQueue);
-            }
-        });
-
-        // Handle clearing specific transaction from queue (admin only)
-        socket.on('clearTransactionUpdate', (transactionId: string) => {
-            if (user.role === Role.ADMIN) {
-                const index = transactionQueue.findIndex(transaction => transaction.transactionId === transactionId);
-                if (index > -1) {
-                    transactionQueue.splice(index, 1);
-                    io?.to('transaction-management').emit('transactionQueue', transactionQueue);
+            // Handle clearing specific transaction from queue (admin only)
+            socket.on('clearTransactionUpdate', (transactionId: string) => {
+                if (user.role === Role.ADMIN) {
+                    const index = transactionQueue.findIndex(transaction => transaction.transactionId === transactionId);
+                    if (index > -1) {
+                        transactionQueue.splice(index, 1);
+                        io?.to('transaction-management').emit('transactionQueue', transactionQueue);
+                    }
                 }
-            }
-        });
+            });
 
-        // Handle clearing all transaction updates (admin only)
-        socket.on('clearAllTransactionUpdates', () => {
-            if (user.role === Role.ADMIN) {
-                transactionQueue.length = 0;
-                io?.emit('transactionQueue', transactionQueue);
-            }
-        });
+            // Handle clearing all transaction updates (admin only)
+            socket.on('clearAllTransactionUpdates', () => {
+                if (user.role === Role.ADMIN) {
+                    transactionQueue.length = 0;
+                    io?.emit('transactionQueue', transactionQueue);
+                }
+            });
+
+        } catch (error: any) {
+            console.error('Error in connection handler:', error.message);
+            socket.emit('connectionError', { message: 'Connection setup failed' });
+        }
     });
 
     return io;

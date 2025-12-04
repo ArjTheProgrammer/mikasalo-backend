@@ -16,7 +16,10 @@ const MONGODB_URI = process.env.NODE_ENV === 'test'
   ? validateEnvVar('TEST_MONGODB_URI')
   : validateEnvVar('MONGODB_URI')
 
+const SECRET = validateEnvVar('SECRET')
+
 export default {
   MONGODB_URI,
   PORT,
+  SECRET,
 }
