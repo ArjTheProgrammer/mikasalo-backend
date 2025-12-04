@@ -106,6 +106,18 @@ export const recipeDataArray: newRecipe[] = [
       { inventoryId: "inv-garlic", quantityUsed: 0.005 } // 5g
     ]
   },
+  {
+    id: "recipe-menu-pasta-pesto",
+    menuItemId: "menu-pasta-pesto",
+    ingredientsUsed: [
+      { inventoryId: "inv-spaghetti-noodles", quantityUsed: 0.15 }, // 150g
+      { inventoryId: "inv-fresh-basil", quantityUsed: 15 }, // 15 leaves
+      { inventoryId: "inv-cashews", quantityUsed: 10 }, // 10 pieces
+      { inventoryId: "inv-olive-oil", quantityUsed: 0.025 }, // 25ml
+      { inventoryId: "inv-garlic", quantityUsed: 0.01 }, // 10g
+      { inventoryId: "inv-parmesan-cheese", quantityUsed: 0.03 } // 30g
+    ]
+  },
 
   // Dessert Recipes (Pre-made items - 1:1 ratio)
   {

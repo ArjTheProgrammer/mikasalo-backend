@@ -222,6 +222,29 @@ export const inventoryDataArray: newInventory[] = [
     lowStockThreshold: 0.3
   },
 
+  // Pesto Pasta Ingredients
+  {
+    id: "inv-fresh-basil",
+    name: "Fresh Basil",
+    unit: Unit.PIECES,
+    currentStock: 50,
+    lowStockThreshold: 10
+  },
+  {
+    id: "inv-cashews",
+    name: "Cashews",
+    unit: Unit.PIECES,
+    currentStock: 500,
+    lowStockThreshold: 100
+  },
+  {
+    id: "inv-olive-oil",
+    name: "Olive Oil",
+    unit: Unit.LITERS,
+    currentStock: 3,
+    lowStockThreshold: 0.5
+  },
+
   // Desserts (Ready-to-sell)
   {
     id: "inv-leche-flan",
