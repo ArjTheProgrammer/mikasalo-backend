@@ -9,6 +9,7 @@ import userRouter from './routes/users';
 import loginRouter from './routes/login';
 import menuRouter from './routes/menu';
 import orderRouter from './routes/orders';
+import inventoryRouter from './routes/inventory';
 import { initializeWebSocket } from './utils/websocket';
 
 mongoose.set('strictQuery', false);
@@ -41,6 +42,7 @@ app.use('/api/users', userRouter);
 app.use('/api/login', loginRouter);
 app.use('/api/menu', menuRouter);
 app.use('/api/orders', orderRouter);
+app.use('/api/inventory', inventoryRouter);
 
 app.get('/ping', (_req, res) => {
   console.log('someone pinged here');

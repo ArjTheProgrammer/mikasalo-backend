@@ -1,5 +1,5 @@
 import Inventory from "../models/inventory.model";
-import { newInventory } from "../utils/validations/inventory.schema";
+import { newInventory, UpdateInventoryInput } from "../utils/validations/inventory.schema";
 import { broadcastLowStockAlert } from "../utils/websocket";
 
 interface StockCheckResult {
@@ -132,10 +132,92 @@ const getLowStockItems = async () => {
     return lowStockItems;
 }
 
+const getInventoryById = async (id: string) => {
+    const inventory = await Inventory.findById(id);
+    return inventory;
+}
+
+const updateInventory = async (id: string, updateData: UpdateInventoryInput) => {
+    const updatedInventory = await Inventory.findByIdAndUpdate(
+        id, 
+        { 
+            ...updateData,
+            updatedAt: new Date()
+        }, 
+        { 
+            new: true,
+            runValidators: true
+        }
+    );
+    return updatedInventory;
+}
+
+const updateStock = async (id: string, operation: 'add' | 'subtract' | 'set', quantity: number) => {
+    const inventory = await Inventory.findById(id);
+    
+    if (!inventory) {
+        throw new Error(`Inventory item not found: ${id}`);
+    }
+    
+    let newStock: number;
+    
+    switch (operation) {
+        case 'add':
+            newStock = inventory.currentStock + quantity;
+            break;
+        case 'subtract':
+            newStock = inventory.currentStock - quantity;
+            if (newStock < 0) {
+                throw new Error(`Cannot subtract ${quantity} from current stock of ${inventory.currentStock}. Result would be negative.`);
+            }
+            break;
+        case 'set':
+            newStock = quantity;
+            if (newStock < 0) {
+                throw new Error(`Stock cannot be set to a negative value: ${quantity}`);
+            }
+            break;
+        default:
+            throw new Error(`Invalid operation: ${operation}`);
+    }
+    
+    const updatedInventory = await Inventory.findByIdAndUpdate(
+        id,
+        { 
+            currentStock: newStock,
+            updatedAt: new Date()
+        },
+        { new: true }
+    );
+    
+    // Check if stock fell below threshold and emit WebSocket notification
+    if (updatedInventory && updatedInventory.currentStock <= updatedInventory.lowStockThreshold) {
+        broadcastLowStockAlert({
+            inventoryId: updatedInventory._id,
+            name: updatedInventory.name,
+            currentStock: updatedInventory.currentStock,
+            lowStockThreshold: updatedInventory.lowStockThreshold,
+            unit: updatedInventory.unit,
+            timestamp: new Date()
+        });
+    }
+    
+    return updatedInventory;
+}
+
+const deleteInventory = async (id: string) => {
+    const deletedInventory = await Inventory.findByIdAndDelete(id);
+    return deletedInventory;
+}
+
 export default {
     getAllInventory,
+    getInventoryById,
     createInventory,
     createManyInventoryItems,
+    updateInventory,
+    updateStock,
+    deleteInventory,
     checkStockAvailability,
     deductStock,
     restoreStock,
